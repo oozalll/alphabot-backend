@@ -2,4 +2,3 @@ fastapi==0.110.0
 uvicorn==0.29.0
 python-binance==1.0.19
 pydantic==2.5.3
-requests==2.31.0
