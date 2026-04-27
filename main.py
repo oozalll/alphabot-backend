@@ -1,4 +1,5 @@
-# main.py - AlphaBot Backend (Binance Gerçek Veri)
+main.py
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from binance.client import Client
@@ -15,36 +16,51 @@ app.add_middleware(
 
 API_KEY = os.environ.get("BINANCE_API_KEY", "")
 API_SECRET = os.environ.get("BINANCE_API_SECRET", "")
-client = Client(API_KEY, API_SECRET)
+
+def get_client():
+    return Client(API_KEY, API_SECRET)
 
 @app.get("/api/balance")
 def get_balance():
-    account = client.get_account()
-    balances = [b for b in account["balances"] if float(b["free"]) > 0]
-    usdt = next((float(b["free"]) for b in balances if b["asset"] == "USDT"), 0)
-    return {"total_usdt": usdt, "balances": balances}
+    try:
+        client = get_client()
+        account = client.get_account()
+        balances = [b for b in account["balances"] if float(b["free"]) > 0]
+        usdt = next((float(b["free"]) for b in balances if b["asset"] == "USDT"), 0)
+        return {"total_usdt": usdt, "balances": balances}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/api/positions")
 def get_positions():
     try:
+        client = get_client()
         positions = client.futures_position_information()
         open_pos = [p for p in positions if float(p["positionAmt"]) != 0]
         return {"positions": open_pos}
-    except:
-        return {"positions": []}
+    except Exception as e:
+        return {"positions": [], "error": str(e)}
 
 @app.get("/api/performance")
 def get_performance():
-    trades = client.get_my_trades(symbol="BTCUSDT", limit=100)
-    wins = sum(1 for t in trades if float(t.get("realizedPnl", 0)) > 0)
-    total = len(trades)
-    winrate = round((wins / total * 100) if total > 0 else 0, 1)
-    return {"winrate": winrate, "total_trades": total}
+    try:
+        client = get_client()
+        trades = client.get_my_trades(symbol="BTCUSDT", limit=100)
+        wins = sum(1 for t in trades if float(t.get("realizedPnl", 0)) > 0)
+        total = len(trades)
+        winrate = round((wins / total * 100) if total > 0 else 0, 1)
+        return {"winrate": winrate, "total_trades": total}
+    except Exception as e:
+        return {"winrate": 0, "total_trades": 0, "error": str(e)}
 
 @app.get("/api/price/{symbol}")
 def get_price(symbol: str):
-    ticker = client.get_symbol_ticker(symbol=symbol)
-    return {"price": float(ticker["price"]), "symbol": symbol}
+    try:
+        client = get_client()
+        ticker = client.get_symbol_ticker(symbol=symbol.upper())
+        return {"price": float(ticker["price"]), "symbol": symbol.upper()}
+    except Exception as e:
+        return {"error": str(e), "symbol": symbol.upper()}
 
 @app.get("/api/risk/status")
 def get_risk():
@@ -73,3 +89,8 @@ def bot_stop():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
